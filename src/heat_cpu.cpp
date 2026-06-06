@@ -2,17 +2,25 @@
 #include <fstream>
 #include <vector>
 #include <chrono>
+#include <cstdlib>
+#include <cmath>
+#include <string>
 
 using namespace std;
 
-// Converts 2D coordinates (i, j) into a 1D array index
+// Convert 2D coordinates (i, j) into a 1D array index
 int index2D(int i, int j, int N) {
     return i * N + j;
 }
 
-// Writes the grid to a CSV file
-void write_csv(vector<double> grid, int N, const char* filename) {
+// Write the grid to a CSV file
+void write_csv(const vector<double>& grid, int N, const char* filename) {
     ofstream file(filename);
+
+    if (!file) {
+        cout << "FILE ERROR " << filename << endl;
+        return;
+    }
 
     file << "x,y,temperature\n";
 
@@ -25,50 +33,109 @@ void write_csv(vector<double> grid, int N, const char* filename) {
     file.close();
 }
 
-int main() {
+// Put a hot square in the centre of the grid
+void initialise_hot_square(vector<double>& grid, int N, int radius) {
+    int centre = N / 2;
+
+    for (int i = centre - radius; i <= centre + radius; i++) {
+        for (int j = centre - radius; j <= centre + radius; j++) {
+            if (i >= 0 && i < N && j >= 0 && j < N) {
+                grid[index2D(i, j, N)] = 100.0;
+            }
+        }
+    }
+}
+
+// Minimum temperature in the grid
+double min_temperature(const vector<double>& grid) {
+    double result = grid[0];
+
+    for (int i = 0; i < (int)grid.size(); i++) {
+        if (grid[i] < result) {
+            result = grid[i];
+        }
+    }
+
+    return result;
+}
+
+// Maximum temperature in the grid
+double max_temperature(const vector<double>& grid) {
+    double result = grid[0];
+
+    for (int i = 0; i < (int)grid.size(); i++) {
+        if (grid[i] > result) {
+            result = grid[i];
+        }
+    }
+
+    return result;
+}
+
+// Total heat in the grid
+double total_heat(const vector<double>& grid) {
+    double result = 0.0;
+
+    for (int i = 0; i < (int)grid.size(); i++) {
+        result = result + grid[i];
+    }
+
+    return result;
+}
+
+int main(int argc, char* argv[]) {
     int N = 1000;
     int steps = 5000;
     double lambda = 0.1;
+    int radius = 50;
+    int save_output = 1;
+
+    if (argc >= 2) {
+        N = stoi(argv[1]);
+    }
+
+    if (argc >= 3) {
+        steps = stoi(argv[2]);
+    }
+
+    if (argc >= 4) {
+        radius = stoi(argv[3]);
+    } else {
+        radius = N / 20;
+    }
+
+    if (argc >= 5) {
+        save_output = stoi(argv[4]);
+    }
 
     vector<double> current(N * N, 0.0);
     vector<double> next(N * N, 0.0);
 
-    // Initial condition
-    int center = N / 2;
-    int radius = 50;
+    initialise_hot_square(current, N, radius);
 
-    for (int i = center - radius; i <= center + radius; i++) {
-        for (int j = center - radius; j <= center + radius; j++) {
-            current[index2D(i, j, N)] = 100.0;
-        }
+    if (save_output == 1) {
+        write_csv(current, N, "output/initial_cpu.csv");
     }
 
-    // Save the initial grid
-    write_csv(current, N, "output/initial.csv");
-
-    // Start timing
     auto start = chrono::high_resolution_clock::now();
 
-    // Main simulation loop
     for (int t = 0; t < steps; t++) {
 
-        // Update only interior points
         for (int i = 1; i < N - 1; i++) {
             for (int j = 1; j < N - 1; j++) {
-
-                double center_value = current[index2D(i, j, N)];
+                double centre_value = current[index2D(i, j, N)];
                 double up = current[index2D(i - 1, j, N)];
                 double down = current[index2D(i + 1, j, N)];
                 double left = current[index2D(i, j - 1, N)];
                 double right = current[index2D(i, j + 1, N)];
 
                 next[index2D(i, j, N)] =
-                    (1.0 - 4.0 * lambda) * center_value
+                    (1.0 - 4.0 * lambda) * centre_value
                     + lambda * (up + down + left + right);
             }
         }
 
-        // Keep boundary fixed at zero
+        // Fixed boundary conditions with boundary staying at zero
         for (int i = 0; i < N; i++) {
             next[index2D(i, 0, N)] = 0.0;
             next[index2D(i, N - 1, N)] = 0.0;
@@ -76,35 +143,35 @@ int main() {
             next[index2D(N - 1, i, N)] = 0.0;
         }
 
-        // Copy next grid into current grid
-        for (int i = 0; i < N * N; i++) {
-            current[i] = next[i];
+        current.swap(next);
+
+        if (save_output == 1 && t + 1 == 100) {
+            write_csv(current, N, "output/step_100_cpu.csv");
         }
 
-        // Save intermediate results
-        if (t == 100) {
-            write_csv(current, N, "output/step_100.csv");
-        }
-
-        if (t == 500) {
-            write_csv(current, N, "output/step_500.csv");
+        if (save_output == 1 && t + 1 == 500) {
+            write_csv(current, N, "output/step_500_cpu.csv");
         }
     }
 
-    // Stop timing
     auto end = chrono::high_resolution_clock::now();
-
     chrono::duration<double> elapsed = end - start;
 
-    // Save final result
-    write_csv(current, N, "output/final.csv");
+    if (save_output == 1) {
+        write_csv(current, N, "output/final_cpu.csv");
+    }
 
     cout << "-------------------------------------------------------" << endl;
-    cout << "SIMULATION END" << endl;
+    cout << "CPU SIMULATION END" << endl;
     cout << "-------------------------------------------------------" << endl;
     cout << "Grid size: " << N << " x " << N << endl;
     cout << "Number of steps: " << steps << endl;
+    cout << "Lambda: " << lambda << endl;
+    cout << "Hot region radius: " << radius << endl;
     cout << "Runtime: " << elapsed.count() << " seconds" << endl;
+    cout << "Minimum temperature: " << min_temperature(current) << endl;
+    cout << "Maximum temperature: " << max_temperature(current) << endl;
+    cout << "Total heat: " << total_heat(current) << endl;
     cout << "-------------------------------------------------------" << endl;
 
     return 0;

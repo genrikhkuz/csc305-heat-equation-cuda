@@ -1,16 +1,15 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Read the CSV file produced by the C++ program
-data = pd.read_csv("output/final.csv")
+filename = "output/final_cuda.csv" # CHOOSE FILE
 
-# Rebuild the 2D temperature grid from the x, y, temperature columns
+data = pd.read_csv(filename)
+
 grid = data.pivot(index="y", columns="x", values="temperature")
 
-# Plot the heat map
 plt.imshow(grid, origin="lower")
 plt.colorbar(label="Temperature")
-plt.title("2D Heat Equation Final State")
+plt.title(filename)
 plt.xlabel("x")
 plt.ylabel("y")
 plt.show()
